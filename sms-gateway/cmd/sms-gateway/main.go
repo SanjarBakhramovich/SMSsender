@@ -2,34 +2,28 @@ package main
 
 import (
 	"log"
-	"sms-gateway/internal/infrastructure/api"
-	"sms-gateway/internal/infrastructure/db"
 	"sms-gateway/internal/infrastructure/queue"
-	"sms-gateway/internal/interfaces/web"
+	"sms-gateway/internal/interfaces/smsru"
+	"sms-gateway/internal/usecases"
+	"time"
 )
 
 func main() {
-    // Инициализация базы данных
-    dbConn, err := db.ConnectPostgres()
-    if err != nil {
-        log.Fatalf("Ошибка подключения к базе данных: %v", err)
-    }
-
     // Инициализация очереди
-    queueConn, err := queue.ConnectRedis()
-    if err != nil {
-        log.Fatalf("Ошибка подключения к Redis: %v", err)
-    }
+    redisQueue := queue.NewRedisQueue("localhost:6379", "", 0)
 
-    // Запуск API-сервера
-    err = api.StartServer(dbConn, queueConn)
-    if err != nil {
-        log.Fatalf("Ошибка запуска API-сервера: %v", err)
-    }
+    // Инициализация клиента sms.ru
+    smsClient := smsru.NewSmsRuClient("your-api-id-here")
 
-    // Запуск веб-интерфейса
-    webServer := web.NewServer()
-    if err := webServer.Run(); err != nil {
-        log.Fatalf("Ошибка запуска веб-сервера: %v", err)
+    // Инициализация usecase
+    smsUseCase := usecases.NewSendSMSUseCase(redisQueue, smsClient)
+
+    // Постоянная обработка очереди
+    for {
+        err := smsUseCase.ProcessSMSQueue()
+        if err != nil {
+            log.Printf("Error processing SMS queue: %v", err)
+        }
+        time.Sleep(5 * time.Second) // Задержка между итерациями
     }
 }
